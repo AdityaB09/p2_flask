@@ -1,6 +1,7 @@
+from flask import Flask, request, jsonify
 import numpy as np
-from flask import Flask, request, jsonify, render_template
 
+# import everything you need from your light version
 from project_p2_light import (
     load_as_list,
     load_glove,
@@ -31,13 +32,15 @@ print("Model loaded and ready.")
 
 # ------------- FLASK APP -------------
 
-app = Flask(__name__, static_folder="static", template_folder="templates")
+app = Flask(__name__)
 
 
 @app.route("/", methods=["GET"])
 def index():
-    # Render the chat UI
-    return render_template("index.html")
+    return (
+        "CS 421 Chatbot is running. "
+        "Send a POST request to /chat with JSON {\"message\": \"your text\"}."
+    )
 
 
 @app.route("/chat", methods=["POST"])
@@ -46,7 +49,7 @@ def chat():
     JSON input:  { "message": "I feel happy today" }
     JSON output: {
         "sentiment": "...",
-        "style": "..."
+        "style": "...",
     }
     """
     data = request.get_json(force=True)
@@ -57,6 +60,7 @@ def chat():
 
     # ----- Sentiment -----
     vec = string2vec(glove_reps, user_text)
+    # handle all-zero vector edge case
     if np.linalg.norm(vec) == 0.0:
         sentiment_reply = "I'm not sure how you're feeling based on that."
     else:
@@ -90,5 +94,8 @@ def chat():
 
 
 if __name__ == "__main__":
-    # For local testing
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    import os
+
+    # Render will set PORT env var, fall back to 5000 for local dev
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
