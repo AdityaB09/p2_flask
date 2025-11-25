@@ -30,17 +30,16 @@ import spacy
 nlp = spacy.load("en_core_web_sm")
 #-----------------------------------FILE WRITER-------------------------------------------------------
 
-import nltk
-from nltk.tokenize import word_tokenize
-try:
-    nltk.data.find("tokenizers/punkt")
-except LookupError:
-    nltk.download("punkt")
 
-try:
-    nltk.data.find("tokenizers/punkt_tab")
-except LookupError:
-    nltk.download("punkt_tab")
+# try:
+#     nltk.data.find("tokenizers/punkt")
+# except LookupError:
+#     nltk.download("punkt")
+
+# try:
+#     nltk.data.find("tokenizers/punkt_tab")
+# except LookupError:
+#     nltk.download("punkt_tab")
 f = open("{0}.txt".format(strftime("%Y-%m-%d_%H-%M-%S", localtime())), "w")
 
 #-----------------------------------CODE FROM PART 1--------------------------------------------------
