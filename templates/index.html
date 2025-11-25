@@ -3,18 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <title>CS 421 Chatbot</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
   </head>
   <body>
     <div class="app">
       <header class="app-header">
         <h1>CS 421 Chatbot</h1>
-        <p>Type a message below and the bot will respond with sentiment & style analysis.</p>
+        <p>
+          Type a message below and the bot will respond with sentiment &amp;
+          style analysis, just like the terminal version.
+        </p>
       </header>
 
-      <main class="chat-container" id="chat">
-        <!-- Messages will be appended here -->
-      </main>
+      <main class="chat-container" id="chat"></main>
 
       <form id="chat-form" class="chat-input">
         <textarea
@@ -32,6 +36,16 @@
       const form = document.getElementById("chat-form");
       const textarea = document.getElementById("message");
 
+      // Conversation states (mirror the terminal version)
+      const STATE_ASK_NAME = "ASK_NAME";
+      const STATE_SENTIMENT_INPUT = "SENTIMENT_INPUT";
+      const STATE_STYLE_INPUT = "STYLE_INPUT";
+      const STATE_END_MENU = "END_MENU";
+      const STATE_DONE = "DONE";
+
+      let state = STATE_ASK_NAME;
+      let userName = "";
+
       function appendMessage(sender, text) {
         const wrapper = document.createElement("div");
         wrapper.className = "message-row " + (sender === "user" ? "user" : "bot");
@@ -42,12 +56,52 @@
 
         wrapper.appendChild(bubble);
         chat.appendChild(wrapper);
-
         chat.scrollTop = chat.scrollHeight;
       }
 
-      // Initial greeting
-      appendMessage("bot", "Welcome to the CS 421 chatbot! Tell me how you're feeling today.");
+      function disableInput() {
+        textarea.disabled = true;
+        textarea.placeholder = "Conversation ended. Refresh to start again.";
+      }
+
+      // Call backend /chat and return JSON
+      async function callChat(text) {
+        // typing indicator
+        const typing = document.createElement("div");
+        typing.className = "message-row bot";
+        typing.id = "typing-indicator";
+
+        const bubble = document.createElement("div");
+        bubble.className = "message-bubble typing";
+        bubble.innerText = "Thinking...";
+        typing.appendChild(bubble);
+        chat.appendChild(typing);
+        chat.scrollTop = chat.scrollHeight;
+
+        try {
+          const resp = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text }),
+          });
+          const data = await resp.json();
+          typing.remove();
+          return data;
+        } catch (err) {
+          typing.remove();
+          appendMessage(
+            "bot",
+            "Oops, something went wrong talking to the server. Please try again."
+          );
+          throw err;
+        }
+      }
+
+      // Initial greeting — same as terminal style
+      appendMessage(
+        "bot",
+        "Welcome to the CS 421 chatbot! What is your name?"
+      );
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -58,43 +112,98 @@
         textarea.value = "";
         textarea.focus();
 
-        // Show a temporary "typing..." message
-        const typingId = "typing-indicator";
-        const typing = document.createElement("div");
-        typing.id = typingId;
-        typing.className = "message-row bot";
-        typing.innerHTML = '<div class="message-bubble typing">Thinking...</div>';
-        chat.appendChild(typing);
-        chat.scrollTop = chat.scrollHeight;
-
-        try {
-          const resp = await fetch("/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: text }),
-          });
-
-          const data = await resp.json();
-
-          // Remove typing indicator
-          typing.remove();
-
-          if (data.error) {
-            appendMessage("bot", "Error: " + data.error);
-          } else {
-            const combined =
-              data.sentiment + "\n\n" + data.style;
-            appendMessage("bot", combined);
-          }
-        } catch (err) {
-          typing.remove();
+        if (state === STATE_ASK_NAME) {
+          // Treat first message as the user's name
+          userName = text;
           appendMessage(
             "bot",
-            "Oops, something went wrong talking to the server. Please try again."
+            `Thanks ${userName}! What do you want to talk about today?`
+          );
+          state = STATE_SENTIMENT_INPUT;
+          return;
+        }
+
+        if (state === STATE_SENTIMENT_INPUT) {
+          // Use backend just for sentiment; ignore style for now
+          try {
+            const data = await callChat(text);
+            const sentimentReply =
+              data.sentiment || "I'm not sure how you're feeling based on that.";
+            appendMessage("bot", sentimentReply);
+            appendMessage(
+              "bot",
+              "I'd also like to do a quick stylistic analysis. What's on your mind today?"
+            );
+            state = STATE_STYLE_INPUT;
+          } catch {
+            // error already shown
+          }
+          return;
+        }
+
+        if (state === STATE_STYLE_INPUT) {
+          // Use backend for stylistic analysis; ignore sentiment
+          try {
+            const data = await callChat(text);
+            const styleReply =
+              data.style || "I couldn't compute your writing style this time.";
+            appendMessage("bot", styleReply);
+            appendMessage(
+              "bot",
+              "What would you like to do next? You can quit, redo the sentiment analysis, or redo the stylistic analysis."
+            );
+            state = STATE_END_MENU;
+          } catch {
+            // error already shown
+          }
+          return;
+        }
+
+        if (state === STATE_END_MENU) {
+          const lower = text.toLowerCase();
+
+          if (lower.includes("quit")) {
+            appendMessage(
+              "bot",
+              `Thanks for chatting, ${userName || "friend"}! Goodbye.`
+            );
+            state = STATE_DONE;
+            disableInput();
+            return;
+          }
+
+          if (lower.includes("sentiment")) {
+            appendMessage(
+              "bot",
+              `Thanks ${userName || ""}! What do you want to talk about today?`
+            );
+            state = STATE_SENTIMENT_INPUT;
+            return;
+          }
+
+          if (lower.includes("stylistic")) {
+            appendMessage(
+              "bot",
+              "I'd also like to do a quick stylistic analysis. What's on your mind today?"
+            );
+            state = STATE_STYLE_INPUT;
+            return;
+          }
+
+          appendMessage(
+            "bot",
+            "Sorry, I didn't understand that. Would you like to quit, redo the sentiment analysis, or redo the stylistic analysis?"
+          );
+          return;
+        }
+
+        if (state === STATE_DONE) {
+          appendMessage(
+            "bot",
+            "The conversation has already ended. Refresh the page to start again."
           );
         }
       });
     </script>
   </body>
 </html>
-
